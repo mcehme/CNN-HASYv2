@@ -1,29 +1,18 @@
-import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten
+from tensorflow.keras.optimizers import SGD
 
-class Model():
-    def __init__(self):
-        self.layers = list()
-        self.compiled = False
-    def add_layer(self, layer):
-        if self.compiled:
-            raise Exception("Cannot add layer to compiled model")
-        self.layers.append(layer)
-    def compile(self, optimizer, loss, metrics):
-        if self.compiled:
-            raise Exception("Cannot compile already compiled model")
-        self.model = tf.keras.models.Sequential(self.layers)
-        self.model.compile(optimizer, loss, metrics)
-        self.compiled = True
-    def fit(self, X_train, y_train, epochs):
-        if not self.compiled:
-            raise Exception("Model must be compiled before fitting")
-        self.model.fit(X_train, y_train, epochs=epochs)
-    def evaluate(self, X_test, y_test):
-        if not self.compiled:
-            raise Exception("Model must be compiled before evaluating")
-        return self.model.evaluate(X_test, y_test)
-    def store(self, dir):
-        if not self.compiled:
-            raise Exception("Model must be compiled before storing")
-        self.model.save_weights(dir)
+def define_model():
+    model = Sequential()
+    model.add(Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_uniform', input_shape=(28, 28, 1)))
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Flatten())
+    model.add(Dense(100, activation='relu', kernel_initializer='he_uniform'))
+    model.add(Dense(10, activation='softmax'))
     
+    # compile model
+    opt = SGD(learning_rate=0.01, momentum=0.9)
+    model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+    
+    return model
+
