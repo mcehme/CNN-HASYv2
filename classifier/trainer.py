@@ -112,6 +112,8 @@ class Trainer():
                 stats = mod.evaluate(*self.data[1])
 
                 details = copy.deepcopy(kwargs)
+                details['conv_layers'] = i
+                details['dense_layers'] = j
                 details['loss'] = stats[0]
                 details['accuracy'] = stats[1]
                 if os.path.exists(self.stats_dump):
