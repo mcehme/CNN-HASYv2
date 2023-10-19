@@ -1,20 +1,25 @@
-import tensorflow as tf 
+import tensorflow as tf
+import copy, json, os
+
 class Trainer():
     def __init__(self, num_classes, data, epochs):
-        X1, y1, X2, y2 = *data[0], *data[1]
-        X1 = X1.reshape(-1, 28, 28, 1).astype('float32')
-        X2 = X2.reshape(-1, 28, 28, 1).astype('float32')
-        self.data = (X1, y1), (X2, y2)
+        self.data = data
         self.epochs = epochs
         self.num_classes = num_classes
+        
     
-    def tune(self, dropouts, dense_activations,
+    def tune(self, file_location, stats_dump, dropouts, dense_activations,
               dense_units, cnn_activations, pool_sizes,
                 kernel_sizes, filters, layers):
+        self.best = 0
+        self.file_location = file_location
+        self.stats_dump = stats_dump
         self.__dropout_tune(dropouts, dense_activation_tune=dense_activations,
               units_tune=dense_units, cnn_activation_tune=cnn_activations, pool_tune=pool_sizes,
                 kernel_tune=kernel_sizes, filter_tune=filters, layer_tune=layers)
-
+        mod = tf.keras.models.load_model(self.file_location)
+        mod.summary()
+        print(self.best_config)
 
     def __dropout_tune(self, dropouts, **kwargs):
         dense_activation_tune = kwargs.get('dense_activation_tune', ('relu',))
@@ -96,17 +101,34 @@ class Trainer():
         for i in layers:
             for j in layers:
                 mod = tf.keras.models.Sequential()
-                if j == layers[-1]:
-                    dense_kwargs['units'] = self.num_classes
-                    dense_kwargs['activation'] = 'softmax'
-                    dropout_kwargs['rate'] = 0
                 self.__add_layers(mod, i, self.__conv_layer, conv_kwargs, pool_kwargs)
                 self.__add_layers(mod, 1, self.__flatten, flatten_kwargs)
                 self.__add_layers(mod, j, self.__dense_layer, dense_kwargs, dropout_kwargs)
-                mod.compile('adam', tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), ['accuracy'])
-                mod.fit(*self.data[0], epochs=self.epochs)
-                print(mod.evaluate(*self.data[1]))
-    
+                copy_kwargs = dense_kwargs.copy()
+                copy_kwargs['units'] = self.num_classes
+                self.__add_layers(mod, 1, self.__dense_layer, copy_kwargs, {"rate":0})
+                mod.compile('adam', tf.keras.losses.CategoricalCrossentropy(from_logits=True), ['accuracy'])
+                mod.fit(*self.data[0], epochs=self.epochs, verbose=0)
+                stats = mod.evaluate(*self.data[1])
+
+                details = copy.deepcopy(kwargs)
+                details['loss'] = stats[0]
+                details['accuracy'] = stats[1]
+                if os.path.exists(self.stats_dump):
+                    with open(self.stats_dump, 'r') as f:
+                        stats_dump = json.load(f)
+                else:
+                    stats_dump = []
+                stats_dump.append(details)
+
+                with open(self.stats_dump, 'w') as f:
+                    json.dump(stats_dump, f)
+
+                if stats[1] > self.best:
+                    self.best = stats[1]
+                    self.best_config = copy.deepcopy(kwargs)
+                    mod.save(self.file_location)
+
     
     def __add_layers(self, mod, num_layers, callback, *args):
         for _ in range(0, num_layers):
